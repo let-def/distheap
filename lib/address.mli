@@ -17,7 +17,6 @@ end
 
 type 'u error
 type ('u, 't) family
-type 'u t = T : ('u, 't) family * 't -> 'u t
 
 type ('a, 'u) ulwt = ('a, 'u error) result Lwt.t
 
