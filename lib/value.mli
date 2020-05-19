@@ -41,7 +41,6 @@ type 'u output_ref =
 val setup_output : 'u output ->
   data:(string -> offset:int -> length:int -> unit) ->
   ref:'u output_ref ->
-  hash:'u Address.hash_sink ->
   unit
 val flush_output : _ output -> unit
 

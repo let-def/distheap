@@ -23,7 +23,6 @@ and 'u output = {
   obuf: bytes;
   mutable output_data: string -> offset:int -> length:int -> unit;
   mutable output_ref: 'u output_ref;
-  mutable output_hash : 'u Address.hash_sink;
 }
 
 and 'u store = {
@@ -35,9 +34,7 @@ and 'u store = {
 }
 
 let output_buf out length =
-  out.output_data (Bytes.unsafe_to_string out.obuf) ~offset:0 ~length;
-  out.universe.hash_data out.output_hash
-    (Bytes.unsafe_to_string out.obuf) 0 length
+  out.output_data (Bytes.unsafe_to_string out.obuf) ~offset:0 ~length
 
 let output_int8      out n = Bytes.set_int8      out.obuf 0 n; output_buf out 1
 let output_uint8     out n = Bytes.set_uint8     out.obuf 0 n; output_buf out 1
@@ -55,13 +52,10 @@ let output_int64_le  out n = Bytes.set_int64_le  out.obuf 0 n; output_buf out 8
 let output_int64_be  out n = Bytes.set_int64_be  out.obuf 0 n; output_buf out 8
 
 let output_substring out str ~offset ~length =
-  out.output_data str ~offset ~length;
-  out.universe.hash_data out.output_hash
-    (Bytes.unsafe_to_string out.obuf) 0 length
+  out.output_data str ~offset ~length
 
 let output_ref out family role address =
-  out.output_ref.push family role address;
-  out.universe.hash_addr out.output_hash family role address
+  out.output_ref.push family role address
 
 let invalid_store : 'u. 'u store =
   let fail _ = failwith "Value.input: uninitialized store" in
@@ -105,10 +99,10 @@ let fail_output _ = failwith "Value.output: output has not been setup"
 let fail_input _ = failwith "Value.input: input has not been setup"
 
 let make_output universe =
-  let obuf = Bytes.make 8 '\x00' in
-  { universe; obuf; output_data = fail_output;
+  let obuf = Bytes.make 8 '\x00' in {
+    universe; obuf; output_data = fail_output;
     output_ref = { push = fail_output};
-    output_hash = Address.null_sink }
+  }
 
 let make_input () =
   { ibuf = Bytes.empty; limit = 0; cursor = 0;
@@ -138,7 +132,6 @@ let setup_input inp ~buffer cursor len ~store ~ref =
 
 let input_store inp = inp.input_store
 
-let setup_output out ~data ~ref ~hash =
+let setup_output out ~data ~ref =
   out.output_data <- data;
-  out.output_ref <- ref;
-  out.output_hash <- hash
+  out.output_ref <- ref

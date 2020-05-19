@@ -9,30 +9,6 @@ module Description = struct
   let order (type a b) (a : a family) (b : b family) : (a, b) A.Address.ordering =
     match a, b with
     | Digest, Digest -> A.Address.Eq
-
-  type 'a hasher = Buffer : Buffer.t -> Digest.t hasher [@@ocaml.unboxed]
-
-  let hash_make (type a) (Digest : a family) : a hasher =
-    Buffer (Buffer.create 127)
-
-  let hash_reset (type a) (Buffer buf : a hasher) (Digest : a family) =
-    Buffer.reset buf
-
-  let hash_data (type a) (Buffer buf : a hasher) str ofs len =
-    Buffer.add_substring buf str ofs len
-
-  let hash_addr (type a b)
-      (Buffer buf : a hasher) (Digest : b family) role (digest : b) =
-    let len = String.length role in
-    assert (len < 0x7FFFFFFF);
-    Buffer.add_int32_be buf (Int32.of_int len);
-    Buffer.add_string buf role;
-    Buffer.add_string buf digest
-
-  let hash_flush (type a) (Buffer buf : a hasher) : a =
-    let contents = Buffer.contents buf in
-    Buffer.reset buf;
-    Digest.string contents
 end
 
 module Universe = A.Address.Make(Description)
@@ -86,28 +62,30 @@ module Store = struct
                   (role, digest)
                 };
             let result = k input in
+            A.Value.flush_input input;
             Lwt.return_ok result
         );
       store = (fun (type a) (family : (a, _) A.Address.family) k v ->
           let buffer = Buffer.create 127 in
           let Description.Digest = Universe.prj_family family in
           let output = A.Value.make_output Universe.u in
-          let hasher = Universe.u.hash_make family in
           A.Value.setup_output output
             ~data:(fun str ~offset ~length ->
                 Buffer.add_substring buffer str offset length)
-            ~ref:{ push = fun (type a) (family : (a, _) A.Address.family)
-                     role (digest : a) ->
+            ~ref:{
+              push = fun (type a) (family : (a, _) A.Address.family)
+                role (digest : a) ->
                 let Description.Digest = Universe.prj_family family in
                 let length = String.length role in
                 A.Value.output_int32_be output (Int32.of_int length);
                 A.Value.output_substring output role ~offset:0 ~length;
                 A.Value.output_substring output digest ~offset:0 ~length:16
-              }
-            ~hash:(A.Address.hash_sink hasher);
+            };
           k output v;
-          let hash : a = Universe.u.A.Address.hash_flush hasher in
-          StringTable.replace table hash (Buffer.contents buffer);
+          A.Value.flush_output output;
+          let contents = Buffer.contents buffer in
+          let hash : a = Digest.string contents in
+          StringTable.replace table hash contents;
           Lwt.return_ok hash
         )
     } in
